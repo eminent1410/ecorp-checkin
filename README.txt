@@ -14,4 +14,4 @@ IMPORTANT:
 - The existing Apps Script already validates and stores `emotionReason` in the CHECKIN sheet's "Lý do" column.
 
 Frontend camera and GPS run directly in the browser over HTTPS.
-Netlify Function proxies authenticated requests to Apps Script to avoid browser CORS issues.
+Netlify Function proxies authenticated requests to Apps Script to avoid browser CORS issues. Enable branch deploy for supabase-test
