@@ -2678,13 +2678,14 @@ body {
       </div>
 
       <div
+        id="authStatus"
         style="
           font-size:12px;
           opacity:.7;
           margin-top:6px;
         "
       >
-        Đang xác thực tài khoản...
+        Đang kết nối hệ thống...
       </div>
 
       <div class="spinner" id="authSpinner"></div>
@@ -2697,7 +2698,18 @@ body {
           display:flex;
           justify-content:center;
         "
-      ></div>
+      >
+        <button
+          id="googleLoginAction"
+          type="button"
+          onclick="signInWithGoogle()"
+          disabled
+          style="height:44px;padding:0 22px;border:1px solid #dadce0;border-radius:22px;background:#fff;color:#202124;font:500 15px Roboto,Arial,sans-serif;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.08);display:flex;align-items:center;gap:10px;opacity:.65;"
+        >
+          <span style="font-size:19px;font-weight:700;">G</span>
+          Đăng nhập bằng Google
+        </button>
+      </div>
 
     </div>
 
@@ -3336,11 +3348,11 @@ body {
     window.addEventListener('load', initialize);
 
     async function initialize() {
-
       updateClock();
       setInterval(updateClock, 1000);
 
       try {
+        setAuthStatus('Đang kết nối hệ thống...');
         const configResponse = await fetch(
           NETLIFY_API + '?config=1',
           { cache: 'no-store' }
@@ -3382,33 +3394,32 @@ body {
         });
 
       } catch (error) {
-        handleServerError(error);
+        // Keep the login action visible so the user can see the problem instead of
+        // being left on a blank/loading screen.
+        showLoginButton(error?.message || 'Không thể kết nối Supabase.');
       }
     }
 
 
-    function showLoginButton() {
-      // Keep the existing loading/login screen visible until authentication succeeds.
-      // The Google button lives inside that screen, so hiding it here would hide the
-      // login button as well.
+    function showLoginButton(message) {
       const loadingScreen = document.getElementById('loadingScreen');
-      const button = document.getElementById('googleLoginButton');
+      const button = document.getElementById('googleLoginAction');
       const spinner = document.getElementById('authSpinner');
 
       loadingScreen.classList.remove('hide');
-      setAuthStatus('Vui lòng đăng nhập bằng tài khoản Google');
       if (spinner) spinner.style.display = 'none';
 
-      button.innerHTML = `
-        <button
-          type="button"
-          onclick="signInWithGoogle()"
-          style="height:44px;padding:0 22px;border:1px solid #dadce0;border-radius:22px;background:#fff;color:#202124;font:500 15px Roboto,Arial,sans-serif;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.08);display:flex;align-items:center;gap:10px;"
-        >
-          <span style="font-size:19px;font-weight:700;">G</span>
-          Đăng nhập bằng Google
-        </button>
-      `;
+      if (message && message !== 'Vui lòng đăng nhập bằng tài khoản Google') {
+        setAuthStatus(message);
+      } else {
+        setAuthStatus('Vui lòng đăng nhập bằng tài khoản Google');
+      }
+
+      if (button) {
+        button.disabled = !supabase;
+        button.style.opacity = supabase ? '1' : '.65';
+        button.style.cursor = supabase ? 'pointer' : 'not-allowed';
+      }
     }
 
 
@@ -3429,7 +3440,7 @@ body {
 
         if (error) throw error;
       } catch (error) {
-        handleServerError(error);
+        showLoginButton(error?.message || 'Không thể đăng nhập bằng Google.');
       }
     }
 
@@ -3476,7 +3487,7 @@ body {
 
 
     function setAuthStatus(message) {
-      const status = document.querySelector('#loadingScreen .loading-box > div[style]');
+      const status = document.getElementById('authStatus');
       if (status) status.textContent = message;
     }
 
