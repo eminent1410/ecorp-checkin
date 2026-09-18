@@ -3388,8 +3388,17 @@ body {
 
 
     function showLoginButton() {
-      hideLoading();
+      // Keep the existing loading/login screen visible until authentication succeeds.
+      // The Google button lives inside that screen, so hiding it here would hide the
+      // login button as well.
+      const loadingScreen = document.getElementById('loadingScreen');
       const button = document.getElementById('googleLoginButton');
+      const spinner = document.getElementById('authSpinner');
+
+      loadingScreen.classList.remove('hide');
+      setAuthStatus('Vui lòng đăng nhập bằng tài khoản Google');
+      if (spinner) spinner.style.display = 'none';
+
       button.innerHTML = `
         <button
           type="button"

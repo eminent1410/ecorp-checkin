@@ -1,17 +1,17 @@
-ECORP CHECK-IN - NETLIFY
+ECORP CHECK-IN - SUPABASE TEST
 
-1. Deploy the whole folder to Netlify.
-2. Netlify Environment Variable:
-   GOOGLE_CLIENT_ID = your Google OAuth Client ID
-3. Google OAuth Authorized JavaScript origin:
-   https://ecorp-checkin.netlify.app
-4. The Netlify Function proxies authenticated requests to the existing Google Apps Script Web App.
+1. Netlify serves this frontend and exposes only the Supabase public configuration.
+2. Required Netlify environment variables:
+   SUPABASE_URL = Supabase Project URL
+   SUPABASE_PUBLISHABLE_KEY = Supabase Publishable key
+3. Authentication: Google OAuth through Supabase Auth.
+4. Employee access: email must exist in public.employees and active=true.
+5. Check-in photos upload directly from the browser to Supabase Storage bucket:
+   checkin-photos
+6. Check-in records are inserted directly into public.checkins.
 
-IMPORTANT:
-- Code_checkin.js is NOT part of this Netlify package.
-- Code_checkin.js remains in the separately deployed Google Apps Script Web App.
-- The frontend sends `emotionReason` only when the selected emotion is "Chưa tốt lắm".
-- The existing Apps Script already validates and stores `emotionReason` in the CHECKIN sheet's "Lý do" column.
+The existing Google Sheet TEST and Apps Script TEST are kept as the old-system
+reference during migration. Google Sheet synchronization will be added separately
+after the direct Supabase check-in flow is verified.
 
-Frontend camera and GPS run directly in the browser over HTTPS.
-Netlify Function proxies authenticated requests to Apps Script to avoid browser CORS issues. Enable branch deploy for supabase-test
+The UI and existing check-in features are intentionally preserved.
