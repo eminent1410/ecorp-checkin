@@ -1,5 +1,4 @@
 // ECORP Check-in - Netlify Function
-// Frontend configuration only. Check-in data is handled directly by Supabase.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
