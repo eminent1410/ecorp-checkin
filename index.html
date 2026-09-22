@@ -4,7 +4,7 @@
 <head>
 
   <meta charset="UTF-8">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabaseClient/supabaseClient-js@2"></script>
 
   <meta
     name="viewport"
@@ -3328,7 +3328,7 @@ body {
        ========================================== */
 
     let employee = null;
-    let supabase = null;
+    let supabaseClient = null;
     let supabaseUser = null;
 
     const NETLIFY_API = '/.netlify/functions/checkin';
@@ -3367,7 +3367,7 @@ body {
           );
         }
 
-        supabase = window.supabase.createClient(
+        supabaseClient = window.supabase.createClient(
           config.supabaseUrl,
           config.supabasePublishableKey,
           {
@@ -3379,7 +3379,7 @@ body {
           }
         );
 
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await supabaseClient.auth.getSession();
 
         if (session?.user) {
           await authenticateEmployee(session.user);
@@ -3387,7 +3387,7 @@ body {
           showLoginButton();
         }
 
-        supabase.auth.onAuthStateChange(async (event, session) => {
+        supabaseClient.auth.onAuthStateChange(async (event, session) => {
           if (event === 'SIGNED_IN' && session?.user) {
             await authenticateEmployee(session.user);
           }
@@ -3416,22 +3416,22 @@ body {
       }
 
       if (button) {
-        button.disabled = !supabase;
-        button.style.opacity = supabase ? '1' : '.65';
-        button.style.cursor = supabase ? 'pointer' : 'not-allowed';
+        button.disabled = !supabaseClient;
+        button.style.opacity = supabaseClient ? '1' : '.65';
+        button.style.cursor = supabaseClient ? 'pointer' : 'not-allowed';
       }
     }
 
 
     async function signInWithGoogle() {
       try {
-        if (!supabase) {
+        if (!supabaseClient) {
           throw new Error('Supabase chưa sẵn sàng. Vui lòng tải lại trang.');
         }
 
         setAuthStatus('Đang chuyển sang Google đăng nhập...');
 
-        const { error } = await supabase.auth.signInWithOAuth({
+        const { error } = await supabaseClient.auth.signInWithOAuth({
           provider: 'google',
           options: {
             redirectTo: window.location.origin
@@ -3454,7 +3454,7 @@ body {
         supabaseUser = user;
         setAuthStatus('Đang kiểm tra quyền nhân viên...');
 
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
           .from('employees')
           .select('id, employee_id, name, department, phone, email, active')
           .eq('email', user.email.toLowerCase())
@@ -3464,7 +3464,7 @@ body {
         if (error) throw error;
 
         if (!data) {
-          await supabase.auth.signOut();
+          await supabaseClient.auth.signOut();
           throw new Error('Tài khoản này chưa có trong danh sách nhân viên hoặc đã bị khóa.');
         }
 
@@ -3777,7 +3777,7 @@ body {
 
       if (isSubmitting) return;
 
-      if (!supabase || !supabaseUser || !employee) {
+      if (!supabaseClient || !supabaseUser || !employee) {
         showModal('Phiên đăng nhập hết hạn', 'Vui lòng đăng nhập lại trước khi điểm danh.', false);
         return;
       }
@@ -3829,7 +3829,7 @@ body {
         const blob = await dataUrlToBlob(capturedImage);
         const photoPath = `${currentCheckinId}.jpg`;
 
-        const { error: uploadError } = await supabase.storage
+        const { error: uploadError } = await supabaseClient.storage
           .from(PHOTO_BUCKET)
           .upload(photoPath, blob, {
             contentType: 'image/jpeg',
@@ -3839,7 +3839,7 @@ body {
 
         if (uploadError) throw uploadError;
 
-        const { data: inserted, error: insertError } = await supabase
+        const { data: inserted, error: insertError } = await supabaseClient
           .from('checkins')
           .insert({
             checkin_id: currentCheckinId,
@@ -4015,8 +4015,8 @@ body {
 
     async function reloadAccount() {
       try {
-        if (supabase) {
-          await supabase.auth.signOut();
+        if (supabaseClient) {
+          await supabaseClient.auth.signOut();
         }
       } catch (_) {}
       location.reload();
