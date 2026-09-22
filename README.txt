@@ -14,4 +14,4 @@ The existing Google Sheet TEST and Apps Script TEST are kept as the old-system
 reference during migration. Google Sheet synchronization will be added separately
 after the direct Supabase check-in flow is verified.
 
-The UI and existing check-in features are intentionally preserved.
+The UI and existing check-in features are intentionally preserved..
