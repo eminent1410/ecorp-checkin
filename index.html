@@ -4,7 +4,7 @@
 <head>
 
   <meta charset="UTF-8">
-  <script src="https://cdn.jsdelivr.net/npm/@supabaseClient/supabaseClient-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <meta
     name="viewport"
@@ -3364,6 +3364,12 @@ body {
           throw new Error(
             config.message ||
             'Chưa cấu hình Supabase cho phiên bản Netlify.'
+          );
+        }
+
+        if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+          throw new Error(
+            'Không tải được thư viện Supabase. Vui lòng kiểm tra kết nối CDN.'
           );
         }
 
