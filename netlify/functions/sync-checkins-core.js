@@ -101,12 +101,12 @@ async function readNewCheckins(checkpoint) {
 
 function toSheetRow(row) {
   return [
-    row.timestamp ?? '',
+    formatVietnamDateTime(row.timestamp),
     row.email ?? '',
     row.latitude ?? '',
     row.longitude ?? '',
     row.accuracy ?? '',
-    row.photo_path ?? '',
+    publicPhotoUrl(row.photo_path),
     row.emotion ?? '',
     row.emotion_reason ?? '',
     row.survey ?? false,
@@ -114,9 +114,36 @@ function toSheetRow(row) {
   ];
 }
 
+
+function formatVietnamDateTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(date);
+
+  const map = Object.fromEntries(parts.map(p => [p.type, p.value]));
+  return `${map.day}/${map.month}/${map.year} ${map.hour}:${map.minute}:${map.second}`;
+}
+
+function publicPhotoUrl(photoPath) {
+  if (!photoPath) return '';
+  const baseUrl = String(process.env.SUPABASE_URL || '').replace(/\/$/, '');
+  return `${baseUrl}/storage/v1/object/public/checkin-photos/${String(photoPath).split('/').map(encodeURIComponent).join('/')}`;
+}
+
 async function appendToSheet(accessToken, sheetId, values) {
   const range = `${SHEET_NAME}!A:J`;
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(range)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
 
   const response = await fetch(url, {
     method: 'POST',
