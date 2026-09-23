@@ -152,6 +152,12 @@ async function appendToSheet(accessToken, sheetId, values) {
   const endRow = startRow + values.length - 1;
   const range = `${SHEET_NAME}!A${startRow}:J${endRow}`;
 
+  // A direct values.update does not create new grid rows. If the sheet has
+  // reached its current row limit, expand the grid first. This only adds
+  // empty grid rows; it does NOT insert/move any existing rows, so K+ and
+  // their ARRAYFORMULA remain untouched.
+  await ensureSheetRows(accessToken, sheetId, endRow);
+
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
 
   const response = await fetch(url, {
@@ -173,6 +179,60 @@ async function appendToSheet(accessToken, sheetId, values) {
   }
 
   return data;
+}
+
+async function ensureSheetRows(accessToken, sheetId, requiredRow) {
+  const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}?fields=sheets(properties(sheetId,title,gridProperties(rowCount,columnCount)))`;
+
+  const metaResponse = await fetch(metaUrl, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+
+  const meta = await metaResponse.json();
+  if (!metaResponse.ok) {
+    throw new Error(`Google Sheets lỗi khi đọc cấu hình CHECKIN: ${meta.error?.message || 'không đọc được cấu hình sheet'}`);
+  }
+
+  const sheet = meta.sheets?.find(s => s.properties?.title === SHEET_NAME);
+  if (!sheet) {
+    throw new Error(`Không tìm thấy sheet ${SHEET_NAME}`);
+  }
+
+  const sheetNumericId = sheet.properties.sheetId;
+  const currentRowCount = Number(sheet.properties.gridProperties?.rowCount || 0);
+
+  if (requiredRow <= currentRowCount) return;
+
+  // Add a little headroom so the next few check-ins do not immediately need
+  // another grid expansion. appendDimension expands the grid only; it does
+  // not insert data rows or move any existing content/formulas.
+  const rowsToAdd = Math.max(requiredRow - currentRowCount, 20);
+  const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}:batchUpdate`;
+
+  const response = await fetch(batchUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      requests: [{
+        appendDimension: {
+          sheetId: sheetNumericId,
+          dimension: 'ROWS',
+          length: rowsToAdd
+        }
+      }]
+    })
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(`Google Sheets lỗi khi mở rộng số dòng CHECKIN: ${data.error?.message || 'không thể mở rộng sheet'}`);
+  }
 }
 
 async function findNextWriteRow(accessToken, sheetId) {
