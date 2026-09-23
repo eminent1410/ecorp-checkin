@@ -4,7 +4,7 @@
 <head>
 
   <meta charset="UTF-8">
-  <script src="https://cdn.jsdelivr.net/npm/@supabaseClient/supabaseClient-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <meta
     name="viewport"
@@ -3367,6 +3367,12 @@ body {
           );
         }
 
+        if (!window.supabase || typeof window.supabase.createClient !== 'function') {
+          throw new Error(
+            'Không tải được thư viện Supabase. Vui lòng kiểm tra kết nối CDN.'
+          );
+        }
+
         supabaseClient = window.supabase.createClient(
           config.supabaseUrl,
           config.supabasePublishableKey,
@@ -3839,35 +3845,30 @@ body {
 
         if (uploadError) throw uploadError;
 
-        const { data: inserted, error: insertError } = await supabaseClient
-          .from('checkins')
-          .insert({
-            checkin_id: currentCheckinId,
-            employee_id: employee.id,
-            email: employee.email,
-            latitude: locationData.latitude,
-            longitude: locationData.longitude,
-            accuracy: locationData.accuracy,
-            photo_path: photoPath,
-            emotion: emotion,
-            emotion_reason: emotion === 'Chưa tốt lắm' ? emotionReason : '',
-            survey: isSurveyTrip,
-            timestamp: new Date().toISOString()
-          })
-          .select('id, checkin_id, created_at')
-          .single();
+        const { error: insertError } = await supabaseClient
+  .from('checkins')
+  .insert({
+    checkin_id: currentCheckinId,
+    employee_id: employee.id,
+    email: employee.email,
+    latitude: locationData.latitude,
+    longitude: locationData.longitude,
+    accuracy: locationData.accuracy,
+    photo_path: photoPath,
+    emotion: emotion,
+    emotion_reason: emotion === 'Chưa tốt lắm' ? emotionReason : '',
+    survey: isSurveyTrip,
+    timestamp: new Date().toISOString()
+  });
 
-        if (insertError) {
-          // Do not block the successful data path with a cleanup failure.
-          // The scheduled storage cleanup will remove stale orphan files.
-          throw insertError;
-        }
+if (insertError) {
+  throw insertError;
+}
 
         handleSubmitResponse({
-          success: true,
-          employee,
-          checkin: inserted
-        });
+  success: true,
+  employee
+});
 
       } catch (error) {
         isSubmitting = false;
