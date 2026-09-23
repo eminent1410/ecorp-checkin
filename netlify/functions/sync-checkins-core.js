@@ -109,7 +109,7 @@ function toSheetRow(row) {
     publicPhotoUrl(row.photo_path),
     row.emotion ?? '',
     row.emotion_reason ?? '',
-    row.survey ?? false,
+    row.survey === true ? 'x' : '',
     row.checkin_id ?? ''
   ];
 }
@@ -142,16 +142,29 @@ function publicPhotoUrl(photoPath) {
 }
 
 async function appendToSheet(accessToken, sheetId, values) {
-  const range = `${SHEET_NAME}!A:J`;
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
+  if (!values.length) return null;
+
+  // IMPORTANT:
+  // Do NOT use values.append + INSERT_ROWS here.
+  // The production CHECKIN sheet has formulas/ARRAYFORMULA in columns K+.
+  // We only write A:J into existing/new rows without inserting rows.
+  const startRow = await findNextWriteRow(accessToken, sheetId);
+  const endRow = startRow + values.length - 1;
+  const range = `${SHEET_NAME}!A${startRow}:J${endRow}`;
+
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
 
   const response = await fetch(url, {
-    method: 'POST',
+    method: 'PUT',
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ values })
+    body: JSON.stringify({
+      range,
+      majorDimension: 'ROWS',
+      values
+    })
   });
 
   const data = await response.json();
@@ -160,6 +173,39 @@ async function appendToSheet(accessToken, sheetId, values) {
   }
 
   return data;
+}
+
+async function findNextWriteRow(accessToken, sheetId) {
+  // Read only column A. This does not modify the sheet and lets us find
+  // the first row after the existing CHECKIN data without inserting rows.
+  const range = `${SHEET_NAME}!A:A`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(range)}?majorDimension=COLUMNS`;
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(`Google Sheets lỗi khi đọc CHECKIN: ${data.error?.message || 'không đọc được dữ liệu'}`);
+  }
+
+  const columnA = Array.isArray(data.values?.[0]) ? data.values[0] : [];
+
+  // Row 1 is the header. The next row after the last non-empty Timestamp
+  // is the write target. No row is inserted, so K+ remains untouched.
+  let lastNonEmptyRow = 1;
+  for (let i = columnA.length - 1; i >= 1; i--) {
+    if (String(columnA[i] ?? '').trim() !== '') {
+      lastNonEmptyRow = i + 1;
+      break;
+    }
+  }
+
+  return lastNonEmptyRow + 1;
 }
 
 async function getCheckpoint() {
