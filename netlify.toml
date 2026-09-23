@@ -1,3 +1,6 @@
 [build]
   publish = "."
   functions = "netlify/functions"
+
+[functions."sync-checkins"]
+  schedule = "*/5 * * * *"
