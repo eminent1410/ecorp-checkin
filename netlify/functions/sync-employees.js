@@ -23,6 +23,10 @@
 const SHEET_NAME = 'NHÂN VIÊN';
 
 exports.handler = async (event) => {
+  if (process.env.ENABLE_SUPABASE_SYNC !== 'true') {
+    return { statusCode: 404, body: '' };
+  }
+
   if (event.httpMethod === 'OPTIONS') {
     return response(204, '');
   }

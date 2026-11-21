@@ -1,6 +1,10 @@
 const { syncCheckins } = require('./sync-checkins-core');
 
 exports.handler = async () => {
+  if (process.env.ENABLE_SUPABASE_SYNC !== 'true') {
+    return { statusCode: 404, body: '' };
+  }
+
   try {
     const result = await syncCheckins();
     console.log('sync-checkins:', result);

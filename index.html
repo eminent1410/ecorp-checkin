@@ -4,7 +4,7 @@
 <head>
 
   <meta charset="UTF-8">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 
   <meta
     name="viewport"
@@ -2699,16 +2699,6 @@ body {
           justify-content:center;
         "
       >
-        <button
-          id="googleLoginAction"
-          type="button"
-          onclick="signInWithGoogle()"
-          disabled
-          style="height:44px;padding:0 22px;border:1px solid #dadce0;border-radius:22px;background:#fff;color:#202124;font:500 15px Roboto,Arial,sans-serif;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.08);display:flex;align-items:center;gap:10px;opacity:.65;"
-        >
-          <span style="font-size:19px;font-weight:700;">G</span>
-          Đăng nhập bằng Google
-        </button>
       </div>
 
     </div>
@@ -3305,7 +3295,7 @@ body {
         Thành công
       </h2>
 
-      <p id="modalMessage">
+      <p id="modalMessage" style="white-space: pre-line">
         --
       </p>
 
@@ -3328,11 +3318,9 @@ body {
        ========================================== */
 
     let employee = null;
-    let supabaseClient = null;
-    let supabaseUser = null;
+    let googleIdToken = null;
 
     const NETLIFY_API = '/.netlify/functions/checkin';
-    const PHOTO_BUCKET = 'checkin-photos';
 
     let locationData = null;
     let capturedImage = null;
@@ -3342,7 +3330,7 @@ body {
 
 
     /* ==========================================
-       INITIALIZE / SUPABASE AUTH
+       INITIALIZE / GOOGLE SIGN-IN
        ========================================== */
 
     window.addEventListener('load', initialize);
@@ -3360,135 +3348,65 @@ body {
 
         const config = await configResponse.json();
 
-        if (!configResponse.ok || !config.supabaseUrl || !config.supabasePublishableKey) {
-          throw new Error(
-            config.message ||
-            'Chưa cấu hình Supabase cho phiên bản Netlify.'
-          );
+        if (!configResponse.ok || !config.googleClientId) {
+          throw new Error(config.message || 'Chưa cấu hình đăng nhập Google.');
         }
 
-        if (!window.supabase || typeof window.supabase.createClient !== 'function') {
-          throw new Error(
-            'Không tải được thư viện Supabase. Vui lòng kiểm tra kết nối CDN.'
-          );
+        if (!window.google?.accounts?.id) {
+          throw new Error('Không tải được đăng nhập Google. Vui lòng tải lại trang.');
         }
 
-        supabaseClient = window.supabase.createClient(
-          config.supabaseUrl,
-          config.supabasePublishableKey,
-          {
-            auth: {
-              persistSession: true,
-              autoRefreshToken: true,
-              detectSessionInUrl: true
-            }
-          }
+        google.accounts.id.initialize({
+          client_id: config.googleClientId,
+          callback: authenticateEmployee,
+          auto_select: false
+        });
+        google.accounts.id.renderButton(
+          document.getElementById('googleLoginButton'),
+          { theme: 'outline', size: 'large', shape: 'pill', locale: 'vi' }
         );
-
-        const { data: { session } } = await supabaseClient.auth.getSession();
-
-        if (session?.user) {
-          await authenticateEmployee(session.user);
-        } else {
-          showLoginButton();
-        }
-
-        supabaseClient.auth.onAuthStateChange(async (event, session) => {
-          if (event === 'SIGNED_IN' && session?.user) {
-            await authenticateEmployee(session.user);
-          }
-        });
-
+        showLoginStatus('Vui lòng đăng nhập bằng tài khoản Google.');
       } catch (error) {
-        // Keep the login action visible so the user can see the problem instead of
-        // being left on a blank/loading screen.
-        showLoginButton(error?.message || 'Không thể kết nối Supabase.');
+        showLoginStatus(error.message || 'Không thể kết nối hệ thống.');
       }
     }
 
 
-    function showLoginButton(message) {
-      const loadingScreen = document.getElementById('loadingScreen');
-      const button = document.getElementById('googleLoginAction');
-      const spinner = document.getElementById('authSpinner');
-
-      loadingScreen.classList.remove('hide');
-      if (spinner) spinner.style.display = 'none';
-
-      if (message && message !== 'Vui lòng đăng nhập bằng tài khoản Google') {
-        setAuthStatus(message);
-      } else {
-        setAuthStatus('Vui lòng đăng nhập bằng tài khoản Google');
-      }
-
-      if (button) {
-        button.disabled = !supabaseClient;
-        button.style.opacity = supabaseClient ? '1' : '.65';
-        button.style.cursor = supabaseClient ? 'pointer' : 'not-allowed';
-      }
+    function showLoginStatus(message) {
+      document.getElementById('authSpinner').style.display = 'none';
+      setAuthStatus(message);
     }
 
 
-    async function signInWithGoogle() {
+    async function authenticateEmployee({ credential }) {
+      if (!credential) {
+        showLoginStatus('Google chưa xác thực được tài khoản.');
+        return;
+      }
+
+      setAuthStatus('Đang kiểm tra quyền nhân viên...');
       try {
-        if (!supabaseClient) {
-          throw new Error('Supabase chưa sẵn sàng. Vui lòng tải lại trang.');
-        }
-
-        setAuthStatus('Đang chuyển sang Google đăng nhập...');
-
-        const { error } = await supabaseClient.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: window.location.origin
-          }
-        });
-
-        if (error) throw error;
+        const response = await callCheckinApi('getCurrentUser', credential);
+        if (!response.employee) throw new Error('Không tìm thấy nhân viên.');
+        googleIdToken = credential;
+        handleUserResponse(response);
       } catch (error) {
-        showLoginButton(error?.message || 'Không thể đăng nhập bằng Google.');
+        showLoginStatus(error.message || 'Không thể xác thực tài khoản nhân viên.');
       }
     }
 
 
-    async function authenticateEmployee(user) {
-      try {
-        if (!user?.email) {
-          throw new Error('Tài khoản Google không có email.');
-        }
-
-        supabaseUser = user;
-        setAuthStatus('Đang kiểm tra quyền nhân viên...');
-
-        const { data, error } = await supabaseClient
-          .from('employees')
-          .select('id, employee_id, name, department, phone, email, active')
-          .eq('email', user.email.toLowerCase())
-          .eq('active', true)
-          .maybeSingle();
-
-        if (error) throw error;
-
-        if (!data) {
-          await supabaseClient.auth.signOut();
-          throw new Error('Tài khoản này chưa có trong danh sách nhân viên hoặc đã bị khóa.');
-        }
-
-        employee = {
-          id: data.id,
-          employeeId: data.employee_id,
-          name: data.name,
-          department: data.department,
-          phone: data.phone,
-          email: data.email,
-          active: data.active
-        };
-
-        handleUserResponse({ success: true, employee });
-      } catch (error) {
-        hideLoading();
-        showError(error?.message || 'Không thể xác thực tài khoản nhân viên.');
+    async function callCheckinApi(action, idToken, data) {
+      const response = await fetch(NETLIFY_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, idToken, data })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Không thể xử lý yêu cầu điểm danh.');
       }
+      return result;
     }
 
 
@@ -3783,7 +3701,7 @@ body {
 
       if (isSubmitting) return;
 
-      if (!supabaseClient || !supabaseUser || !employee) {
+      if (!googleIdToken || !employee) {
         showModal('Phiên đăng nhập hết hạn', 'Vui lòng đăng nhập lại trước khi điểm danh.', false);
         return;
       }
@@ -3819,7 +3737,8 @@ body {
       const isSurveyTrip = Boolean(document.getElementById('surveyCheckbox')?.checked);
 
       isSubmitting = true;
-      currentCheckinId = crypto.randomUUID();
+      const isRetry = currentCheckinId !== null;
+      currentCheckinId ??= crypto.randomUUID();
 
       const button = document.getElementById('submitBtn');
       button.disabled = true;
@@ -3832,62 +3751,27 @@ body {
       `;
 
       try {
-        const blob = await dataUrlToBlob(capturedImage);
-        const photoPath = `${currentCheckinId}.jpg`;
-
-        const { error: uploadError } = await supabaseClient.storage
-          .from(PHOTO_BUCKET)
-          .upload(photoPath, blob, {
-            contentType: 'image/jpeg',
-            cacheControl: '31536000',
-            upsert: false
-          });
-
-        if (uploadError) throw uploadError;
-
-        const { error: insertError } = await supabaseClient
-  .from('checkins')
-  .insert({
-    checkin_id: currentCheckinId,
-    employee_id: employee.id,
-    email: employee.email,
-    latitude: locationData.latitude,
-    longitude: locationData.longitude,
-    accuracy: locationData.accuracy,
-    photo_path: photoPath,
-    emotion: emotion,
-    emotion_reason: emotion === 'Chưa tốt lắm' ? emotionReason : '',
-    survey: isSurveyTrip,
-    timestamp: new Date().toISOString()
-  });
-
-if (insertError) {
-  throw insertError;
-}
-
-        handleSubmitResponse({
-  success: true,
-  employee
-});
-
+        const response = await callCheckinApi('submitCheckin', googleIdToken, {
+          checkinId: currentCheckinId,
+          isRetry,
+          latitude: locationData.latitude,
+          longitude: locationData.longitude,
+          accuracy: locationData.accuracy,
+          imageBase64: capturedImage,
+          emotion,
+          emotionReason: emotion === 'Chưa tốt lắm' ? emotionReason : '',
+          diKhaoSat: isSurveyTrip
+        });
+        handleSubmitResponse(response);
       } catch (error) {
         isSubmitting = false;
         restoreSubmitButton();
-
-        let message = error?.message || 'Không thể gửi dữ liệu lên hệ thống.';
-
-        if (String(message).toLowerCase().includes('duplicate') ||
-            String(message).toLowerCase().includes('checkin_id')) {
-          message = 'Lần điểm danh này đã được ghi nhận. Vui lòng không gửi lại.';
-        }
-
-        showModal('Điểm danh chưa thành công', message, false);
+        showModal(
+          'Điểm danh chưa thành công',
+          error.message || 'Không thể gửi dữ liệu lên hệ thống.',
+          false
+        );
       }
-    }
-
-
-    function dataUrlToBlob(dataUrl) {
-      return fetch(dataUrl).then(response => response.blob());
     }
 
 
@@ -3916,11 +3800,9 @@ if (insertError) {
 
       showModal(
         'Điểm danh thành công 🎉',
-        `
-          Chào ${response.employee.name}!<br><br>
-          Hệ thống đã ghi nhận điểm danh của bạn thành công.<br><br>
-          Cảm ơn bạn đã đồng hành cùng ECORP.
-        `,
+        `Chào ${response.employee?.name || employee.name}!\n\n` +
+          'Hệ thống đã ghi nhận điểm danh của bạn thành công.\n\n' +
+          'Cảm ơn bạn đã đồng hành cùng ECORP.',
         true
       );
     }
@@ -4005,7 +3887,7 @@ if (insertError) {
       icon.textContent = success ? '✓' : '!';
 
       document.getElementById('modalTitle').textContent = title;
-      document.getElementById('modalMessage').innerHTML = message;
+      document.getElementById('modalMessage').textContent = message;
 
       modal.classList.add('show');
     }
@@ -4014,18 +3896,9 @@ if (insertError) {
       document.getElementById('modal').classList.remove('show');
     }
 
-    async function reloadAccount() {
-      try {
-        if (supabaseClient) {
-          await supabaseClient.auth.signOut();
-        }
-      } catch (_) {}
+    function reloadAccount() {
+      window.google?.accounts?.id?.disableAutoSelect();
       location.reload();
-    }
-
-    function handleServerError(error) {
-      hideLoading();
-      showError(error?.message || 'Không thể kết nối với hệ thống.');
     }
 
 
